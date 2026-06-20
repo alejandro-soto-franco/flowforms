@@ -1,0 +1,14 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Golden image vector siblings (only .png baselines are committed)
+tests/golden/*.pdf
+tests/golden/*.svg
