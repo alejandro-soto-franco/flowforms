@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<VTKFile type="PolyData" version="1.0" byte_order="LittleEndian" header_type="UInt64">
+  <PolyData>
+    <Piece NumberOfPoints="3" NumberOfVerts="0" NumberOfLines="0" NumberOfStrips="0" NumberOfPolys="1">
+      <Points>
+        <DataArray type="Float64" NumberOfComponents="3" format="binary">SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPA/AAAAAAAAAAA=</DataArray>
+      </Points>
+      <Polys>
+        <DataArray type="Int64" Name="connectivity" format="binary">GAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAgAAAAAAAAA=</DataArray>
+        <DataArray type="Int64" Name="offsets" format="binary">CAAAAAAAAAADAAAAAAAAAA==</DataArray>
+      </Polys>
+      <PointData>
+        <DataArray type="Float64" Name="temp" NumberOfComponents="1" format="binary">GAAAAAAAAAAAAAAAAADwPwAAAAAAAABAAAAAAAAACEA=</DataArray>
+      </PointData>
+    </Piece>
+  </PolyData>
+</VTKFile>
