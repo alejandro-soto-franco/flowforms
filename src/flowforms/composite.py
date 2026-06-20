@@ -70,3 +70,38 @@ def stack(top: np.ndarray, bottom: np.ndarray, *, layout: str = "stacked", bg=No
         out[-ph:, -pw:] = inset
         return out
     raise ValueError(f"unknown layout: {layout!r}")
+
+
+import imageio.v3 as iio
+from pathlib import Path
+from . import cine as _cine
+from . import camera as _camera
+from .scene import Scene
+
+
+def render_composite_animation(series, diag: Diagnostics, scene: Scene, *,
+                               quantity: str = "enstrophy", out, fps: int = 30,
+                               top_size=(1080, 810), plot_size=(1080, 360),
+                               layout: str = "stacked", orbit: bool = True,
+                               annotations=(), formats=("mp4", "webm")):
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    n = len(series)
+    positions = None
+    if orbit and n > 0:
+        center, radius = _camera.bounds_center_radius(series[0].mesh)
+        positions = _camera.orbit_positions(center, radius, n)
+    times = np.asarray(series.times)
+    frames_rgb = []
+    for i in range(n):
+        cam = positions[i] if positions is not None else None
+        top = _cine.render_scene(series[i], scene, size=top_size, camera_position=cam)
+        bottom = rolling_plot(diag, quantity, float(times[i]),
+                              size_px=plot_size, annotations=annotations)
+        frames_rgb.append(stack(np.asarray(top)[..., :3], bottom, layout=layout))
+    written = []
+    for fmt in formats:
+        path = out.with_suffix(f".{fmt}")
+        iio.imwrite(path, frames_rgb, fps=fps)
+        written.append(path)
+    return written
