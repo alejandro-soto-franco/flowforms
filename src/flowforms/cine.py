@@ -58,9 +58,13 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
         try:
             f = frame.derive(scene.glow.field)
             cmap = scene.glow.cmap or brand.EMISSIVE_CMAP
+            # When an isosurface is present it owns the single scalar bar; a
+            # glow-only scene keeps its own bar. This avoids a cluttered
+            # double-colorbar in the hero (faint glow + Q-criterion isosurface).
+            glow_bar = not scene.isosurface.enabled
             pl.add_volume(f.mesh, scalars=scene.glow.field, cmap=cmap,
                           opacity="linear", opacity_unit_distance=1.0,
-                          show_scalar_bar=True,
+                          show_scalar_bar=glow_bar,
                           scalar_bar_args=_glow_scalar_bar_args(scene.glow.field))
         except Exception:
             # add_volume can fail if the scalar range is degenerate (all zeros)
