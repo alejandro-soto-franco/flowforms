@@ -1,0 +1,8 @@
+# Build with: flowforms hero --series <run>/vtk/series.pvd \
+#   --diagnostics <run>/diagnostics.parquet --out-dir out/hero \
+#   --impact-time <t> --handle "@yourhandle" \
+#   --caption "Two vortex rings collide head-on, Re tuned for visible reconnection"
+kind = "hero"
+quantity = "enstrophy"
+title = "Colliding Vortex Rings"
+formats = ["mp4", "webm"]

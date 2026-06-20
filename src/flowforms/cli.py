@@ -33,6 +33,21 @@ def main(argv=None) -> int:
     cine_p.add_argument("--slice", action="store_true")
     cine_p.add_argument("--iso", action="store_true")
 
+    movie_p = sub.add_parser("movie", help="composite field-over-plot animation")
+    movie_p.add_argument("--series", required=True)
+    movie_p.add_argument("--diagnostics", required=True)
+    movie_p.add_argument("--quantity", default="enstrophy")
+    movie_p.add_argument("--out", required=True)
+    movie_p.add_argument("--fps", type=int, default=30)
+
+    hero_p = sub.add_parser("hero", help="build the colliding-rings hero piece")
+    hero_p.add_argument("--series", required=True)
+    hero_p.add_argument("--diagnostics", required=True)
+    hero_p.add_argument("--out-dir", required=True)
+    hero_p.add_argument("--impact-time", type=float)
+    hero_p.add_argument("--handle", default="")
+    hero_p.add_argument("--caption", default="")
+
     args = parser.parse_args(argv)
 
     if args.command == "figure":
@@ -72,6 +87,21 @@ def main(argv=None) -> int:
             out = args.out
             fps = args.fps
         cine_mod.render_animation(series, scene, out=out, fps=fps)
+        return 0
+
+    if args.command == "movie":
+        from . import io as fio, diagnostics as fdiag, composite as fcomp
+        from .scene import Scene
+        fcomp.render_composite_animation(
+            fio.load_series(args.series), fdiag.load(args.diagnostics),
+            Scene.default_grid(), quantity=args.quantity, out=args.out, fps=args.fps)
+        return 0
+    if args.command == "hero":
+        from . import io as fio, diagnostics as fdiag, hero as fhero
+        fhero.build_hero(
+            fio.load_series(args.series), fdiag.load(args.diagnostics),
+            out_dir=args.out_dir, impact_time=args.impact_time,
+            handle=args.handle, caption=args.caption)
         return 0
 
     return 1
