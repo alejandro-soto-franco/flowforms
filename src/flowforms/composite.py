@@ -36,18 +36,25 @@ def _crop_or_pad(img: np.ndarray, h: int, w: int) -> np.ndarray:
 
 
 def rolling_plot(diag: Diagnostics, quantity: str, t_now: float, *,
-                 size_px=(1080, 450), annotations=(), ylabel=None,
-                 xlim=None) -> np.ndarray:
-    """Render a diagnostic curve up to t_now with a cursor and annotations.
+                 size_px=(1080, 360), xlim=None, ylim=None) -> np.ndarray:
+    """Render a GROWING diagnostic curve: only data with ``t <= t_now``.
+
+    The line grows rightward as t_now advances (xlim right edge = t_now, which
+    is "now"; no vertical cursor and no full faded curve). The y-limits are
+    FIXED to the full-series range so the axis does not jump while the line
+    grows. Dark house style; axis labels in CM math, title/ticks in CM Sans.
 
     Pixel dimensions are deterministic and independent of content: the figure
     is created at exactly size_px and the axes are placed with fixed margins
-    (no tight_layout, which would reflow when annotations appear). The result
-    is cropped/padded to exactly (h, w, 3) so every call for a given size_px
-    returns identical dimensions -- required so stacked composite frames stay
-    uniform for h264 encoding.
+    (no tight_layout). The result is cropped/padded to exactly (h, w, 3) so
+    every call for a given size_px returns identical dimensions -- required so
+    stacked composite frames stay uniform for h264 encoding.
+
+    xlim: if None, use (data t.min(), t_now). If (t0, t1) is passed, the right
+    edge still tracks t_now -> (t0, t_now). ylim: if None, the full data range
+    of ``quantity``.
     """
-    brand.apply_figure_style()
+    brand.apply_figure_style(dark=True)
     dpi = 100
     w, h = int(size_px[0]), int(size_px[1])
     fig = plt.figure(figsize=(w / dpi, h / dpi), dpi=dpi)
@@ -55,21 +62,28 @@ def rolling_plot(diag: Diagnostics, quantity: str, t_now: float, *,
     ax = fig.add_axes((0.12, 0.22, 0.84, 0.70))
     t = diag.time
     y = diag.column(quantity)
-    ax.plot(t, y, color=brand.PALETTE["muted"], lw=1.0, alpha=0.4)
+    t_now = float(t_now)
+    # GROW: only data up to now. Guard the degenerate single-point case so the
+    # line is still visible at the very first frame.
     mask = t <= t_now
-    ax.plot(t[mask], y[mask], color=brand.PALETTE["blue"], lw=2.2)
-    ax.axvline(t_now, color=brand.PALETTE["rust"], lw=1.5)
-    for (at_t, text) in annotations:
-        if t_now >= at_t:
-            ax.annotate(text, xy=(at_t, np.interp(at_t, t, y)),
-                        xytext=(8, 8), textcoords="offset points",
-                        color=brand.PALETTE["gold"], fontsize=11)
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(ylabel or _LABELS.get(quantity, quantity))
-    if xlim is not None:
-        ax.set_xlim(float(xlim[0]), float(xlim[1]))
+    if mask.sum() >= 1:
+        ax.plot(t[mask], y[mask], color=brand.PALETTE["blue"], lw=2.0)
+    t0 = float(xlim[0]) if xlim is not None else float(t.min())
+    ax.set_xlim(t0, t_now if t_now > t0 else t0 + 1e-9)
+    if ylim is not None:
+        ax.set_ylim(float(ylim[0]), float(ylim[1]))
     else:
-        ax.set_xlim(t.min(), t.max())
+        ymin, ymax = float(np.min(y)), float(np.max(y))
+        if ymax <= ymin:
+            ymax = ymin + 1e-9
+        pad = 0.05 * (ymax - ymin)
+        ax.set_ylim(ymin - pad, ymax + pad)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_linewidth(0.8)
+    ax.xaxis.set_major_formatter(brand.sans_tick_formatter())
+    ax.yaxis.set_major_formatter(brand.sans_tick_formatter())
+    ax.set_xlabel(r"$t$")
+    ax.set_ylabel(_LABELS.get(quantity, quantity))
     img = _fig_to_rgb(fig)
     return _crop_or_pad(img, h, w)
 
@@ -103,7 +117,6 @@ def stack(top: np.ndarray, bottom: np.ndarray, *, layout: str = "stacked", bg=No
 
 import imageio.v3 as iio
 from pathlib import Path
-from PIL import ImageDraw, ImageFont
 from . import cine as _cine
 from . import camera as _camera
 from . import chrome as _chrome
@@ -115,33 +128,17 @@ from .scene import Scene
 normalize_frames = _cine.normalize_frames
 
 
-def _time_readout(img: np.ndarray, text: str, *, panel_h: int | None = None) -> np.ndarray:
-    """Overlay a small time string at the top-right of the top panel."""
-    pil = Image.fromarray(np.asarray(img)[..., :3].astype(np.uint8)).convert("RGB")
-    draw = ImageDraw.Draw(pil)
-    w, h = pil.size
-    try:
-        font = ImageFont.truetype("DejaVuSans.ttf", max(12, w // 45))
-    except Exception:
-        font = ImageFont.load_default()
-    try:
-        bbox = draw.textbbox((0, 0), text, font=font)
-        tw = bbox[2] - bbox[0]
-    except Exception:
-        tw = len(text) * 8
-    x = w - tw - int(0.03 * w)
-    y = int(0.03 * h)
-    draw.text((x, y), text, fill=brand.PALETTE["paper"], font=font)
-    return np.asarray(pil)
-
-
 def render_composite_animation(series, diag: Diagnostics, scene: Scene, *,
                                quantity: str = "enstrophy", out, fps: int = 30,
                                top_size=(1080, 810), plot_size=(1080, 360),
                                layout: str = "stacked", orbit: bool = True,
-                               annotations=(), formats=("mp4", "webm"),
-                               title=None, handle=None, caption=None,
-                               time_readout: bool = True):
+                               formats=("mp4", "webm"), title=None):
+    """Render the cinematic composite: 3D render over a GROWING rolling plot.
+
+    The growing rolling plot conveys time, so there is no per-frame time
+    readout and no yellow commentary. Only a subtle CM Sans title is overlaid
+    via chrome.
+    """
     n = len(series)
     if n == 0:
         raise ValueError("empty series; nothing to render")
@@ -152,17 +149,17 @@ def render_composite_animation(series, diag: Diagnostics, scene: Scene, *,
         center, radius = _camera.bounds_center_radius(series[0].mesh)
         positions = _camera.orbit_positions(center, radius, n)
     times = np.asarray(series.times)
-    xlim = (float(times[0]), float(times[-1])) if len(times) else None
+    # Grow from the series start; the right edge tracks t_now per frame.
+    t0 = float(times[0]) if len(times) else None
     frames_rgb = []
     for i in range(n):
         cam = positions[i] if positions is not None else None
         top = _cine.render_scene(series[i], scene, size=top_size, camera_position=cam)
         bottom = rolling_plot(diag, quantity, float(times[i]),
-                              size_px=plot_size, annotations=annotations, xlim=xlim)
+                              size_px=plot_size,
+                              xlim=(t0, None) if t0 is not None else None)
         frame = stack(top, bottom, layout=layout)
-        frame = _chrome.add_chrome(frame, title=title, handle=handle, caption=caption)
-        if time_readout:
-            frame = _time_readout(frame, f"t = {float(times[i]):.2f}")
+        frame = _chrome.add_chrome(frame, title=title)
         frames_rgb.append(frame)
     frames_rgb = normalize_frames(frames_rgb)
     written = []

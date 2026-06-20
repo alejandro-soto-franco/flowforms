@@ -27,6 +27,10 @@ def hero_scene() -> Scene:
 def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
                title="Colliding Vortex Rings", handle="", caption="",
                impact_time=None, fps=30) -> dict:
+    """Build the hero pieces. Only a subtle CM Sans title is rendered as chrome;
+    no name/handle, no yellow caption/commentary, no impact annotation. The
+    handle/caption params are accepted (for CLI compatibility) but ignored.
+    """
     if "enstrophy" not in diag.columns:
         raise ValueError(
             f"diagnostics missing required 'enstrophy' column; have {diag.columns}")
@@ -35,7 +39,6 @@ def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     scene = hero_scene()
-    ann = ((impact_time, "impact"),) if impact_time is not None else ()
     results: dict = {}
 
     # Portrait 1080x1350 (top 1080x900 + plot 1080x450) and square 1080x1080.
@@ -47,19 +50,18 @@ def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
         paths = _composite.render_composite_animation(
             series, diag, scene, quantity="enstrophy",
             out=out_dir / f"hero_{name}", fps=fps, layout="stacked",
-            annotations=ann, formats=formats,
-            title=title, handle=handle, caption=caption, time_readout=True,
-            **sz)
+            formats=formats, title=title, **sz)
         results[name] = paths
 
-    # Poster: a single composited frame at the impact / enstrophy-peak time, with chrome.
+    # Poster: a single composited frame at the impact / enstrophy-peak time,
+    # with the title-only chrome (no name, no yellow).
     idx = poster_frame_index(series.times, diag.column("enstrophy"), impact_time)
     from . import cine as _cine
     top = _cine.render_scene(series[idx], scene, size=(1080, 900))
     bottom = _composite.rolling_plot(diag, "enstrophy", float(series.times[idx]),
-                                     size_px=(1080, 450), annotations=ann)
+                                     size_px=(1080, 450))
     frame = _composite.stack(top, bottom, layout="stacked")
-    frame = _chrome.add_chrome(frame, title=title, handle=handle, caption=caption)
+    frame = _chrome.add_chrome(frame, title=title)
     poster = out_dir / "hero_poster.png"
     Image.fromarray(frame).save(poster)
     results["poster"] = poster
