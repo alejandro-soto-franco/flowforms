@@ -25,6 +25,40 @@ class _FakeSeries:
     def __iter__(self): return iter(self._f)
 
 
+def test_normalize_frames_uniform_even_shape():
+    # Frames of differing shapes must collapse to one common even shape.
+    frames = [
+        np.zeros((90, 120, 3), dtype=np.uint8),
+        np.zeros((91, 121, 3), dtype=np.uint8),
+        np.zeros((100, 130, 3), dtype=np.uint8),
+    ]
+    out = comp.normalize_frames(frames)
+    shapes = {a.shape for a in out}
+    assert len(shapes) == 1, f"frames not uniform: {shapes}"
+    (h, w, c) = out[0].shape
+    assert c == 3
+    assert h % 2 == 0 and w % 2 == 0
+    assert len(out) == len(frames)
+
+
+def test_normalize_frames_empty():
+    assert comp.normalize_frames([]) == []
+
+
+def test_composite_animation_empty_series_raises(tmp_path):
+    class _Empty:
+        times = np.array([])
+        def __len__(self): return 0
+        def __getitem__(self, i): raise IndexError
+        def __iter__(self): return iter(())
+    p = tmp_path / "d.parquet"
+    pq.write_table(pa.table({"time": [0.0], "enstrophy": [1.0]}), p)
+    d = diag.load(p)
+    with pytest.raises(ValueError, match="empty series"):
+        comp.render_composite_animation(_Empty(), d, Scene.default_grid(),
+                                        out=tmp_path / "x", formats=("mp4",))
+
+
 @pytest.mark.skipif(not _has_gl(), reason="no GL/xvfb")
 def test_composite_animation_writes(tmp_path):
     from tests.test_spectrum import _single_mode_frame

@@ -25,6 +25,17 @@ class _FakeSeries:
     def __iter__(self): return iter(self._frames)
 
 
+def test_render_animation_empty_series_raises(tmp_path):
+    class _Empty:
+        times = np.array([])
+        def __len__(self): return 0
+        def __getitem__(self, i): raise IndexError
+        def __iter__(self): return iter(())
+    with pytest.raises(ValueError, match="empty series"):
+        cine.render_animation(_Empty(), Scene.default_grid(),
+                              out=tmp_path / "x", formats=("mp4",))
+
+
 @pytest.mark.skipif(not _has_gl(), reason="no GL/xvfb")
 def test_render_animation_writes_files(tmp_path):
     from tests.test_spectrum import _single_mode_frame

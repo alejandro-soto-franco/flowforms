@@ -27,6 +27,11 @@ def hero_scene() -> Scene:
 def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
                title="Colliding Vortex Rings", handle="", caption="",
                impact_time=None, fps=30) -> dict:
+    if "enstrophy" not in diag.columns:
+        raise ValueError(
+            f"diagnostics missing required 'enstrophy' column; have {diag.columns}")
+    if len(series) == 0:
+        raise ValueError("empty series; nothing to render")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     scene = hero_scene()
@@ -42,7 +47,9 @@ def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
         paths = _composite.render_composite_animation(
             series, diag, scene, quantity="enstrophy",
             out=out_dir / f"hero_{name}", fps=fps, layout="stacked",
-            annotations=ann, formats=formats, **sz)
+            annotations=ann, formats=formats,
+            title=title, handle=handle, caption=caption, time_readout=True,
+            **sz)
         results[name] = paths
 
     # Poster: a single composited frame at the impact / enstrophy-peak time, with chrome.

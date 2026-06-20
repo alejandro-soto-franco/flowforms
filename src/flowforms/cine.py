@@ -9,6 +9,17 @@ from .io import Frame
 from .scene import Scene
 
 
+def _glow_scalar_bar_args(field: str) -> Any:
+    """Scalar-bar styling for the glow field: a readable light-colored label
+    on the dark cinematic background. Returned as Any to satisfy pyvista's
+    strict ScalarBarArgs TypedDict for add_mesh/add_volume."""
+    light = brand.PALETTE["paper"]
+    args: Any = dict(title=field, color=light, title_font_size=14,
+                     label_font_size=11, n_labels=3, vertical=True,
+                     position_x=0.88, position_y=0.10, width=0.08, height=0.55)
+    return args
+
+
 def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
     mesh = frame.mesh
     if scene.glow.enabled:
@@ -16,7 +27,9 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
             f = frame.derive(scene.glow.field)
             cmap = scene.glow.cmap or brand.EMISSIVE_CMAP
             pl.add_volume(f.mesh, scalars=scene.glow.field, cmap=cmap,
-                          opacity="linear", opacity_unit_distance=1.0)
+                          opacity="linear", opacity_unit_distance=1.0,
+                          show_scalar_bar=True,
+                          scalar_bar_args=_glow_scalar_bar_args(scene.glow.field))
         except Exception:
             # add_volume can fail if the scalar range is degenerate (all zeros)
             # or the grid is too small for the fixed-point mapper; skip gracefully.
@@ -66,7 +79,9 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
 def _surface_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
     if scene.glow.enabled:
         cmap = scene.glow.cmap or brand.EMISSIVE_CMAP
-        pl.add_mesh(frame.mesh, scalars=scene.glow.field, cmap=cmap, smooth_shading=True)
+        pl.add_mesh(frame.mesh, scalars=scene.glow.field, cmap=cmap,
+                    smooth_shading=True, show_scalar_bar=True,
+                    scalar_bar_args=_glow_scalar_bar_args(scene.glow.field))
     else:
         pl.add_mesh(frame.mesh, smooth_shading=True)
 
@@ -97,18 +112,62 @@ def render_scene(frame: Frame, scene: Scene, *, size: tuple[int, int] = (1080, 1
 
 from pathlib import Path
 import imageio.v3 as iio
+from PIL import Image
 from . import camera as _camera
+
+
+_CODECS = {"webm": "libvpx-vp9", "mp4": "libx264", "mov": "libx264"}
+
+
+def _imwrite_video(path: Path, frames, *, fps: int) -> None:
+    """Write a video, picking a container-appropriate codec. imageio-ffmpeg
+    otherwise defaults to libx264 for every suffix, which a WebM container
+    rejects ('Only VP8/VP9/AV1') and breaks the pipe."""
+    fmt = path.suffix.lstrip(".").lower()
+    kwargs: dict[str, Any] = {"fps": fps}
+    codec = _CODECS.get(fmt)
+    if codec is not None:
+        kwargs["codec"] = codec
+    iio.imwrite(path, frames, **kwargs)
+
+
+def _even(n: int, multiple: int = 2) -> int:
+    """Round n up to the nearest multiple (default 2; 16 is safest for h264)."""
+    if n % multiple == 0:
+        return n
+    return n + (multiple - n % multiple)
+
+
+def normalize_frames(frames, *, multiple: int = 16) -> list[np.ndarray]:
+    """Resize every frame to one common shape whose width/height are a multiple
+    of ``multiple`` (>=2, even). Returns a perfectly uniform list so video
+    encoders never see a frame-size change mid-stream -- this is the fix for the
+    imageio-ffmpeg broken-pipe error caused by inconsistent frame dimensions."""
+    arrs = [np.asarray(f)[..., :3] for f in frames]
+    if not arrs:
+        return arrs
+    target_h = _even(max(a.shape[0] for a in arrs), multiple)
+    target_w = _even(max(a.shape[1] for a in arrs), multiple)
+    out = []
+    for a in arrs:
+        if a.shape[0] != target_h or a.shape[1] != target_w:
+            a = np.asarray(
+                Image.fromarray(a.astype(np.uint8)).resize((target_w, target_h)))
+        out.append(np.ascontiguousarray(a.astype(np.uint8))[..., :3])
+    return out
 
 
 def render_animation(series, scene: Scene, *, out, fps: int = 30,
                      size: tuple[int, int] = (1080, 1080), orbit: bool = True,
                      formats: tuple[str, ...] = ("mp4", "webm")) -> list[Path]:
     """Render a Series to one movie per format with an optional orbit camera."""
+    n = len(series)
+    if n == 0:
+        raise ValueError("empty series; nothing to render")
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    n = len(series)
     positions = None
-    if orbit and n > 0:
+    if orbit:
         center, radius = _camera.bounds_center_radius(series[0].mesh)
         positions = _camera.orbit_positions(center, radius, n)
     frames_rgb = []
@@ -117,9 +176,10 @@ def render_animation(series, scene: Scene, *, out, fps: int = 30,
         cam = positions[i] if positions is not None else None
         img = render_scene(frame, scene, size=size, camera_position=cam)
         frames_rgb.append(np.asarray(img)[..., :3])
+    frames_rgb = normalize_frames(frames_rgb)
     written = []
     for fmt in formats:
         path = out.with_suffix(f".{fmt}")
-        iio.imwrite(path, frames_rgb, fps=fps)
+        _imwrite_video(path, frames_rgb, fps=fps)
         written.append(path)
     return written
