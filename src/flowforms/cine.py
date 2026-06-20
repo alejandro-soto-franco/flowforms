@@ -93,3 +93,33 @@ def render_scene(frame: Frame, scene: Scene, *, size: tuple[int, int] = (1080, 1
     # screenshot returns None only when return_img=False; with return_img=True it
     # always returns an array. Cast to ndarray to satisfy the declared return type.
     return np.asarray(img)
+
+
+from pathlib import Path
+import imageio.v3 as iio
+from . import camera as _camera
+
+
+def render_animation(series, scene: Scene, *, out, fps: int = 30,
+                     size: tuple[int, int] = (1080, 1080), orbit: bool = True,
+                     formats: tuple[str, ...] = ("mp4", "webm")) -> list[Path]:
+    """Render a Series to one movie per format with an optional orbit camera."""
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    n = len(series)
+    positions = None
+    if orbit and n > 0:
+        center, radius = _camera.bounds_center_radius(series[0].mesh)
+        positions = _camera.orbit_positions(center, radius, n)
+    frames_rgb = []
+    for i in range(n):
+        frame = series[i]
+        cam = positions[i] if positions is not None else None
+        img = render_scene(frame, scene, size=size, camera_position=cam)
+        frames_rgb.append(np.asarray(img)[..., :3])
+    written = []
+    for fmt in formats:
+        path = out.with_suffix(f".{fmt}")
+        iio.imwrite(path, frames_rgb, fps=fps)
+        written.append(path)
+    return written
