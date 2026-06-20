@@ -42,6 +42,21 @@ def field_cmap(kind: str) -> Any:
     return _DIVERGING if kind in signed else _SEQUENTIAL
 
 
+def field_cmap_for_name(name: str) -> Any:
+    """Return the appropriate colormap for a field identified by name.
+
+    Classifies by substring: fields whose name contains 'vorticity', 'vort',
+    'pressure', or 'helicity' are treated as signed (diverging map); all
+    others (magnitudes, Q, enstrophy, etc.) get the sequential map. This is
+    the single source of truth used by both figures._field_kind and cine's
+    inline slice-field classification.
+    """
+    signed_substrings = ("vorticity", "vort", "pressure", "helicity")
+    if any(s in name for s in signed_substrings):
+        return _DIVERGING
+    return _SEQUENTIAL
+
+
 @lru_cache(maxsize=1)
 def latex_available() -> bool:
     """True if a system LaTeX is on PATH (so usetex is safe)."""

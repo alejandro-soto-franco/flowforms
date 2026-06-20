@@ -159,7 +159,7 @@ def render_composite_animation(series, diag: Diagnostics, scene: Scene, *,
         top = _cine.render_scene(series[i], scene, size=top_size, camera_position=cam)
         bottom = rolling_plot(diag, quantity, float(times[i]),
                               size_px=plot_size, annotations=annotations, xlim=xlim)
-        frame = stack(np.asarray(top)[..., :3], bottom, layout=layout)
+        frame = stack(top, bottom, layout=layout)
         frame = _chrome.add_chrome(frame, title=title, handle=handle, caption=caption)
         if time_readout:
             frame = _time_readout(frame, f"t = {float(times[i]):.2f}")

@@ -58,7 +58,7 @@ def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
     top = _cine.render_scene(series[idx], scene, size=(1080, 900))
     bottom = _composite.rolling_plot(diag, "enstrophy", float(series.times[idx]),
                                      size_px=(1080, 450), annotations=ann)
-    frame = _composite.stack(np.asarray(top)[..., :3], bottom, layout="stacked")
+    frame = _composite.stack(top, bottom, layout="stacked")
     frame = _chrome.add_chrome(frame, title=title, handle=handle, caption=caption)
     poster = out_dir / "hero_poster.png"
     Image.fromarray(frame).save(poster)

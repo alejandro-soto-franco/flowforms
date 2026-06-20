@@ -71,10 +71,9 @@ import pyvista as pv  # noqa: E402
 _AXIS_INDEX = {"x": 0, "y": 1, "z": 2}
 
 
-def _field_kind(field: str) -> str:
-    if "vorticity" in field or field in ("pressure", "helicity"):
-        return "vorticity"
-    return "magnitude"
+def _field_cmap(field: str):
+    """Return the colormap for this field name, delegating to brand."""
+    return brand.field_cmap_for_name(field)
 
 
 def slice_still(frame: Frame, field: str, *, axis: str = "z", index=None, ax=None):
@@ -97,9 +96,12 @@ def slice_still(frame: Frame, field: str, *, axis: str = "z", index=None, ax=Non
         fig, ax = plt.subplots(figsize=(5.0, 4.2))
     else:
         fig = ax.figure
-    cmap = brand.field_cmap(_field_kind(field))
+    cmap = _field_cmap(field)
     vmax = float(np.abs(plane).max()) or 1.0
-    if _field_kind(field) == "vorticity":
+    # Use symmetric limits for signed (diverging) fields.
+    signed_substrings = ("vorticity", "vort", "pressure", "helicity")
+    is_signed = any(s in field for s in signed_substrings)
+    if is_signed:
         im = ax.pcolormesh(plane.T, cmap=cmap, vmin=-vmax, vmax=vmax, shading="auto")
     else:
         im = ax.pcolormesh(plane.T, cmap=cmap, shading="auto")
@@ -116,15 +118,20 @@ def _offscreen_plotter() -> pv.Plotter:
 
 
 def isosurface_still(frame: Frame, field: str, value: float, *, path) -> Path:
-    """Render a single isosurface of a grid scalar field, off-screen."""
+    """Render a single isosurface of a grid scalar field, off-screen.
+
+    Works for both native point-data fields and derived/cell-data fields.
+    If the field is not in point_data after derivation (e.g. it landed in
+    cell_data), we promote via cell_data_to_point_data before contouring.
+    """
     from typing import cast as _cast
     f = frame.derive(field)
     mesh = f.mesh
     if field not in mesh.point_data:
-        mesh = f.derive(field).mesh
+        mesh = mesh.cell_data_to_point_data()
     contour = _cast(pv.PolyData, mesh.contour([value], scalars=field))
     pl = _offscreen_plotter()
-    pl.add_mesh(contour, cmap=brand.field_cmap(_field_kind(field)), smooth_shading=True)
+    pl.add_mesh(contour, cmap=_field_cmap(field), smooth_shading=True)
     pl.camera_position = "iso"
     out = Path(path)
     pl.screenshot(str(out))

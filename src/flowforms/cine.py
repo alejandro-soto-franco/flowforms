@@ -40,7 +40,7 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
             # Cast axis to Any to satisfy pyrefly's strict Literal type for `normal`.
             sl: Any = f.mesh.slice(normal=scene.slice.axis)  # type: ignore[arg-type]
             pl.add_mesh(sl, scalars=scene.slice.field,  # type: ignore[arg-type]
-                        cmap=brand.field_cmap("vorticity" if "vort" in scene.slice.field else "magnitude"))
+                        cmap=brand.field_cmap_for_name(scene.slice.field))
         except Exception:
             # slice can fail on degenerate mesh extents; skip gracefully.
             pass
@@ -68,7 +68,7 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
             stream: Any = mesh.streamlines(
                 vectors=scene.streamlines.vectors,
                 n_points=scene.streamlines.n_points,
-                source_radius=float(np.linalg.norm(mesh.length) / 2) or 1.0,
+                source_radius=(mesh.length / 2) or 1.0,
             )
             tubes: Any = stream.tube(radius=scene.streamlines.radius)
             pl.add_mesh(tubes, cmap=scene.streamlines.cmap or brand.field_cmap("magnitude"))  # type: ignore[arg-type]
@@ -77,13 +77,47 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
 
 
 def _surface_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
+    mesh = frame.mesh
     if scene.glow.enabled:
         cmap = scene.glow.cmap or brand.EMISSIVE_CMAP
-        pl.add_mesh(frame.mesh, scalars=scene.glow.field, cmap=cmap,
-                    smooth_shading=True, show_scalar_bar=True,
-                    scalar_bar_args=_glow_scalar_bar_args(scene.glow.field))
+        # Determine which scalar to display: prefer glow.field, fall back to
+        # the first available scalar, or render plain geometry if none exist.
+        all_scalars = list(mesh.point_data.keys()) + list(mesh.cell_data.keys())
+        glow_field = scene.glow.field
+        if glow_field not in all_scalars:
+            glow_field = all_scalars[0] if all_scalars else None
+        try:
+            if glow_field is not None:
+                pl.add_mesh(mesh, scalars=glow_field, cmap=cmap,
+                            smooth_shading=True, show_scalar_bar=True,
+                            scalar_bar_args=_glow_scalar_bar_args(glow_field))
+            else:
+                pl.add_mesh(mesh, smooth_shading=True)
+        except Exception:
+            pl.add_mesh(mesh, smooth_shading=True)
     else:
-        pl.add_mesh(frame.mesh, smooth_shading=True)
+        pl.add_mesh(mesh, smooth_shading=True)
+
+    # Nematic director glyphs: render double-ended directors as two glyph sets
+    # (director and its negation) so the field reads as headless/bidirectional.
+    for nematic_name in frame.nematic_fields():
+        try:
+            from .io import base_name as _base_name
+            label = _base_name(nematic_name)
+            directors = np.asarray(mesh.point_data[nematic_name])
+            # Build a copy of the mesh with the negated director vectors.
+            neg_mesh = mesh.copy()
+            neg_mesh[nematic_name] = -directors
+            # Forward glyphs
+            fwd: Any = mesh.glyph(orient=nematic_name, scale=False, factor=0.1,
+                                  tolerance=0.05)
+            pl.add_mesh(fwd, color=brand.PALETTE["gold"])  # type: ignore[arg-type]
+            # Backward glyphs (negated direction)
+            bwd: Any = neg_mesh.glyph(orient=nematic_name, scale=False, factor=0.1,
+                                      tolerance=0.05)
+            pl.add_mesh(bwd, color=brand.PALETTE["gold"])  # type: ignore[arg-type]
+        except Exception:
+            pass  # director rendering is best-effort; skip on failure
 
 
 def render_scene(frame: Frame, scene: Scene, *, size: tuple[int, int] = (1080, 1080),
@@ -106,8 +140,9 @@ def render_scene(frame: Frame, scene: Scene, *, size: tuple[int, int] = (1080, 1
     img = pl.screenshot(return_img=return_img)
     pl.close()
     # screenshot returns None only when return_img=False; with return_img=True it
-    # always returns an array. Cast to ndarray to satisfy the declared return type.
-    return np.asarray(img)
+    # always returns an array. Slice to 3-channel RGB here so every caller gets a
+    # consistent shape without needing its own [..., :3] guard.
+    return np.asarray(img)[..., :3]
 
 
 from pathlib import Path
@@ -175,7 +210,7 @@ def render_animation(series, scene: Scene, *, out, fps: int = 30,
         frame = series[i]
         cam = positions[i] if positions is not None else None
         img = render_scene(frame, scene, size=size, camera_position=cam)
-        frames_rgb.append(np.asarray(img)[..., :3])
+        frames_rgb.append(img)
     frames_rgb = normalize_frames(frames_rgb)
     written = []
     for fmt in formats:

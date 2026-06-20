@@ -23,8 +23,8 @@ def energy_spectrum(frame: Frame) -> tuple[np.ndarray, np.ndarray]:
     # back to (nx, ny, nz, 3): x-fastest flat -> reshape(dims[::-1]) gives (nz,ny,nx)
     vel = np.transpose(vel, (2, 1, 0, 3))
 
-    n = nx
-    uhat = np.fft.fftn(vel, axes=(0, 1, 2)) / (n ** 3)
+    ntot = nx * ny * nz
+    uhat = np.fft.fftn(vel, axes=(0, 1, 2)) / ntot
     e_density = 0.5 * np.sum(np.abs(uhat) ** 2, axis=-1)  # per mode
 
     kx = np.fft.fftfreq(nx, d=1.0 / nx)
