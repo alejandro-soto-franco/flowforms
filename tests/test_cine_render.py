@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import pyvista as pv
 import flowforms.io as fio
-from flowforms.scene import Scene, Glow
+from flowforms.scene import Scene, Glow, Isosurface, Streamlines
 import flowforms.cine as cine
 from tests.test_spectrum import _single_mode_frame
 
@@ -66,4 +66,26 @@ def test_surface_nematic_directors_render():
     scene = Scene.default_surface()
     scene.glow.field = "temp"
     img = cine.render_scene(frame, scene, size=(256, 256))
+    assert isinstance(img, np.ndarray) and img.shape[2] == 3
+
+
+def test_isosurface_primary_cascade_scene_returns_image():
+    """Rev-2: a cascade scene with Q-criterion isosurface primary renders without error."""
+    frame = _single_mode_frame(n=24, k0=2)
+    scene = Scene(
+        isosurface=Isosurface(enabled=True, field="qcriterion", values=()),
+        streamlines=Streamlines(enabled=True, n_points=40, opacity=0.15),
+    )
+    img = cine.render_scene(frame, scene, size=(256, 256))
+    assert isinstance(img, np.ndarray)
+    assert img.shape[0] == 256 and img.shape[1] == 256 and img.shape[2] == 3
+
+
+def test_streamlines_faint_opacity_renders_without_error():
+    """Rev-2: streamlines with opacity=0.15 (faint) must render without error."""
+    frame = _single_mode_frame(n=24, k0=2)
+    scene = Scene(
+        streamlines=Streamlines(enabled=True, n_points=40, opacity=0.15),
+    )
+    img = cine.render_scene(frame, scene, size=(128, 128))
     assert isinstance(img, np.ndarray) and img.shape[2] == 3

@@ -21,3 +21,15 @@ def test_enabled_layers_list():
     s = Scene.default_grid()
     names = s.enabled_layers()
     assert "glow" in names and isinstance(names, list)
+
+
+def test_streamlines_opacity_field_default():
+    """Streamlines.opacity defaults to 1.0 (fully opaque, backward compatible)."""
+    st = Streamlines()
+    assert st.opacity == 1.0
+
+
+def test_streamlines_opacity_field_accepted():
+    """Streamlines.opacity accepts a float in [0, 1]."""
+    st = Streamlines(enabled=True, n_points=40, opacity=0.15)
+    assert st.opacity == 0.15

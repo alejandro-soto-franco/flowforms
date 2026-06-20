@@ -9,6 +9,38 @@ from .io import Frame
 from .scene import Scene
 
 
+def _apply_cm_sans_to_scalar_bar(pl: pv.Plotter) -> None:
+    """Set the scalar bar actor's title and label text to CM Sans (cmss10.ttf).
+
+    Uses VTK's SetFontFamily(VTK_FONT_FILE) + SetFontFile(path) on both the
+    title text property and the label text property. Falls back silently if the
+    TTF is missing or VTK refuses the font file; the cinema theme default font
+    is used in that case.
+    """
+    try:
+        import vtk
+        font_path = brand.cm_sans_font_file()
+        actors = pl.renderer.GetActors2D()
+        actors.InitTraversal()
+        while True:
+            actor = actors.GetNextActor2D()
+            if actor is None:
+                break
+            # ScalarBarActor has GetLabelTextProperty and GetTitleTextProperty.
+            get_label = getattr(actor, "GetLabelTextProperty", None)
+            get_title = getattr(actor, "GetTitleTextProperty", None)
+            if get_label is None or get_title is None:
+                continue
+            for prop in (get_label(), get_title()):
+                if prop is None:
+                    continue
+                prop.SetFontFamily(vtk.VTK_FONT_FILE)  # type: ignore[attr-defined]
+                prop.SetFontFile(font_path)
+    except Exception:
+        # Font wiring is best-effort; fall back to theme default silently.
+        pass
+
+
 def _glow_scalar_bar_args(field: str) -> Any:
     """Scalar-bar styling for the glow field: a readable light-colored label
     on the dark cinematic background. Returned as Any to satisfy pyvista's
@@ -47,9 +79,55 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
     if scene.isosurface.enabled:
         try:
             f = frame.derive(scene.isosurface.field)
-            vals = list(scene.isosurface.values) or [float(np.nanmean(f.array(scene.isosurface.field)))]
+            if scene.isosurface.values:
+                vals = list(scene.isosurface.values)
+            else:
+                # Auto-threshold: use a high percentile of the positive values so
+                # we land firmly inside vortex cores rather than at the near-zero
+                # mean (which gives garbage geometry for Q-criterion).
+                arr = f.array(scene.isosurface.field)
+                pos = arr[arr > 0]
+                if pos.size > 0:
+                    thresh = float(np.percentile(pos, 90))
+                else:
+                    # Fallback when no positive values: mean + 1.5 std (non-zero
+                    # spread still gives a surface; degenerate arrays are caught
+                    # by the outer except).
+                    thresh = float(np.nanmean(arr) + 1.5 * np.nanstd(arr))
+                vals = [thresh]
             iso: Any = f.mesh.contour(vals, scalars=scene.isosurface.field)
-            pl.add_mesh(iso, cmap=brand.field_cmap("magnitude"), smooth_shading=True)  # type: ignore[arg-type]
+            # Color the isosurface by velocity_mag for perceptual richness; fall
+            # back to the primary field if velocity is unavailable.
+            try:
+                f_vel = frame.derive("velocity_mag")
+                iso_colored: Any = iso
+                # Map velocity_mag onto the isosurface via interpolation.
+                iso_colored = iso.sample(f_vel.mesh)
+                color_field = "velocity_mag"
+            except Exception:
+                iso_colored = iso
+                color_field = scene.isosurface.field
+            sbar_args: Any = dict(
+                title=color_field,
+                color=brand.PALETTE["paper"],
+                title_font_size=14,
+                label_font_size=11,
+                n_labels=3,
+                vertical=True,
+                position_x=0.02,
+                position_y=0.10,
+                width=0.08,
+                height=0.55,
+            )
+            pl.add_mesh(  # type: ignore[arg-type]
+                iso_colored,
+                scalars=color_field,
+                cmap=brand.field_cmap("magnitude"),
+                smooth_shading=True,
+                show_scalar_bar=True,
+                scalar_bar_args=sbar_args,
+            )
+            _apply_cm_sans_to_scalar_bar(pl)
         except Exception:
             # contour can fail if the isosurface value is outside the scalar range;
             # skip gracefully.
@@ -71,7 +149,11 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
                 source_radius=(mesh.length / 2) or 1.0,
             )
             tubes: Any = stream.tube(radius=scene.streamlines.radius)
-            pl.add_mesh(tubes, cmap=scene.streamlines.cmap or brand.field_cmap("magnitude"))  # type: ignore[arg-type]
+            pl.add_mesh(  # type: ignore[arg-type]
+                tubes,
+                cmap=scene.streamlines.cmap or brand.field_cmap("magnitude"),
+                opacity=scene.streamlines.opacity,
+            )
         except Exception:
             pass  # streamline seeding can fail on degenerate fields; skip the layer
 

@@ -32,6 +32,7 @@ class Streamlines:
     n_points: int = 200
     radius: float = 0.01
     cmap: str | None = None
+    opacity: float = 1.0
 
 
 @dataclass

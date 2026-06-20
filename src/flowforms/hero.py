@@ -17,15 +17,30 @@ def poster_frame_index(times, values, impact_time=None) -> int:
 
 
 def hero_scene() -> Scene:
-    s = Scene.default_grid()
-    s.glow.enabled = True
-    s.glow.field = "omega_mag"
-    s.streamlines.enabled = True
+    """Cascade look: Q-criterion isosurfaces primary, streamlines faint hints."""
+    from .scene import Background, Glow, Isosurface, Streamlines
+    s = Scene(
+        background=Background(enabled=True),
+        # Glow very subtle so it does not wash out the isosurfaces.
+        glow=Glow(enabled=True, field="omega_mag", opacity=0.08),
+        # Q-criterion isosurfaces are the star: let cine auto-pick the positive
+        # percentile threshold so vortex tubes fragmenting read clearly.
+        isosurface=Isosurface(enabled=True, field="qcriterion", values=()),
+        # A handful of faint streamlines hint at large-scale flow without
+        # blocking the view of the isosurface geometry.
+        streamlines=Streamlines(
+            enabled=True,
+            vectors="velocity",
+            n_points=40,
+            radius=0.01,
+            opacity=0.15,
+        ),
+    )
     return s
 
 
 def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
-               title="Colliding Vortex Rings", handle="", caption="",
+               title="Taylor-Green Turbulence Cascade", handle="", caption="",
                impact_time=None, fps=30) -> dict:
     """Build the hero pieces. Only a subtle CM Sans title is rendered as chrome;
     no name/handle, no yellow caption/commentary, no impact annotation. The
