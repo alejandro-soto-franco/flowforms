@@ -17,6 +17,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            xvfb \
             libgl1 \
             libglx-mesa0 \
             libxrender1 \
@@ -33,4 +34,4 @@ jobs:
         run: uv sync --locked
 
       - name: Run tests
-        run: uv run pytest -q
+        run: xvfb-run -a uv run pytest -q
