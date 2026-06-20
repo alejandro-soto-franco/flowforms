@@ -64,3 +64,81 @@ def save(fig, path: str | Path) -> None:
     fig.savefig(path)
     for ext in (".pdf", ".svg"):
         fig.savefig(path.with_suffix(ext))
+
+
+import pyvista as pv  # noqa: E402
+
+_AXIS_INDEX = {"x": 0, "y": 1, "z": 2}
+
+
+def _field_kind(field: str) -> str:
+    if "vorticity" in field or field in ("pressure", "helicity"):
+        return "vorticity"
+    return "magnitude"
+
+
+def slice_still(frame: Frame, field: str, *, axis: str = "z", index=None, ax=None):
+    """Render a 2D slice of a grid scalar field with matplotlib."""
+    brand.apply_figure_style()
+    if frame.kind != "grid":
+        raise ValueError("slice_still requires a grid frame")
+    f = frame.derive(field)
+    dims = np.array(f.mesh.dimensions)  # (nx, ny, nz)
+    nx, ny, nz = (int(d) for d in dims)
+    data = f.array(field)
+    if data.ndim > 1:
+        data = np.linalg.norm(data, axis=1)
+    vol = np.transpose(data.reshape(nz, ny, nx), (2, 1, 0))  # (nx,ny,nz)
+    a = _AXIS_INDEX[axis]
+    if index is None:
+        index = vol.shape[a] // 2
+    plane = np.take(vol, index, axis=a)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5.0, 4.2))
+    else:
+        fig = ax.figure
+    cmap = brand.field_cmap(_field_kind(field))
+    vmax = float(np.abs(plane).max()) or 1.0
+    if _field_kind(field) == "vorticity":
+        im = ax.pcolormesh(plane.T, cmap=cmap, vmin=-vmax, vmax=vmax, shading="auto")
+    else:
+        im = ax.pcolormesh(plane.T, cmap=cmap, shading="auto")
+    ax.set_aspect("equal")
+    ax.set_title(field)
+    fig.colorbar(im, ax=ax, label=field)
+    fig.tight_layout()
+    return fig
+
+
+def _offscreen_plotter() -> pv.Plotter:
+    pv.OFF_SCREEN = True
+    return pv.Plotter(off_screen=True, theme=brand.figure_pv_theme())
+
+
+def isosurface_still(frame: Frame, field: str, value: float, *, path) -> Path:
+    """Render a single isosurface of a grid scalar field, off-screen."""
+    from typing import cast as _cast
+    f = frame.derive(field)
+    mesh = f.mesh
+    if field not in mesh.point_data:
+        mesh = f.derive(field).mesh
+    contour = _cast(pv.PolyData, mesh.contour([value], scalars=field))
+    pl = _offscreen_plotter()
+    pl.add_mesh(contour, cmap=brand.field_cmap(_field_kind(field)), smooth_shading=True)
+    pl.camera_position = "iso"
+    out = Path(path)
+    pl.screenshot(str(out))
+    pl.close()
+    return out
+
+
+def surface_still(frame: Frame, scalar: str, *, path) -> Path:
+    """Render an on-surface scalar map for a .vtp manifold, off-screen."""
+    pl = _offscreen_plotter()
+    pl.add_mesh(frame.mesh, scalars=scalar, cmap=brand.field_cmap("magnitude"),
+                smooth_shading=True, show_edges=False)
+    pl.camera_position = "iso"
+    out = Path(path)
+    pl.screenshot(str(out))
+    pl.close()
+    return out
