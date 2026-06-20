@@ -83,3 +83,17 @@ def figure_pv_theme() -> Any:
     theme.cmap = "viridis"
     theme.transparent_background = False
     return theme
+
+
+# Emissive colormap for volume glow (dark to hot, reads as light emission).
+EMISSIVE_CMAP: Any = getattr(cmocean.cm, "thermal")
+
+
+def cinema_pv_theme() -> Any:
+    """A PyVista theme for dark, emissive cinematic renders."""
+    theme = getattr(pv.themes, "DarkTheme")()
+    theme.background = PALETTE["cine_bg"]
+    theme.font.color = PALETTE["paper"]
+    theme.cmap = "magma"
+    theme.transparent_background = False
+    return theme
