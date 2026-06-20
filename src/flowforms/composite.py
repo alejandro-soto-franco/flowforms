@@ -4,6 +4,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 
 from . import brand
 from .diagnostics import Diagnostics
@@ -42,3 +43,30 @@ def rolling_plot(diag: Diagnostics, quantity: str, t_now: float, *,
     ax.set_xlim(t.min(), t.max())
     fig.tight_layout()
     return _fig_to_rgb(fig)
+
+
+def _resize(img: np.ndarray, w: int, h: int) -> np.ndarray:
+    return np.asarray(Image.fromarray(img.astype(np.uint8)).resize((w, h)))
+
+
+def stack(top: np.ndarray, bottom: np.ndarray, *, layout: str = "stacked", bg=None) -> np.ndarray:
+    top = np.asarray(top)[..., :3]
+    bottom = np.asarray(bottom)[..., :3]
+    if layout == "stacked":
+        w = top.shape[1]
+        bh = round(bottom.shape[0] * w / bottom.shape[1])
+        bottom_r = _resize(bottom, w, bh)
+        return np.vstack([top, bottom_r])
+    if layout == "side_by_side":
+        h = top.shape[0]
+        bw = round(bottom.shape[1] * h / bottom.shape[0])
+        bottom_r = _resize(bottom, bw, h)
+        return np.hstack([top, bottom_r])
+    if layout == "pip":
+        out = top.copy()
+        ph = top.shape[0] // 3
+        pw = round(bottom.shape[1] * ph / bottom.shape[0])
+        inset = _resize(bottom, pw, ph)
+        out[-ph:, -pw:] = inset
+        return out
+    raise ValueError(f"unknown layout: {layout!r}")
