@@ -11,6 +11,7 @@
       </Polys>
       <PointData>
         <DataArray type="Float64" Name="temp" NumberOfComponents="1" format="binary">GAAAAAAAAAAAAAAAAADwPwAAAAAAAABAAAAAAAAACEA=</DataArray>
+        <DataArray type="Float64" Name="director__nematic" NumberOfComponents="3" format="binary">SAAAAAAAAAAAAAAAAADwPwAAAAAAAAAAAAAAAAAAAAAAAAAAAADwPwAAAAAAAAAAAAAAAAAAAAAAAAAAAADwPwAAAAAAAAAAAAAAAAAAAAA=</DataArray>
       </PointData>
     </Piece>
   </PolyData>
