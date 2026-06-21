@@ -16,16 +16,21 @@ def poster_frame_index(times, values, impact_time=None) -> int:
     return int(np.argmax(np.asarray(values)))
 
 
-def hero_scene() -> Scene:
-    """Cascade look: Q-criterion isosurfaces primary, streamlines faint hints."""
+def hero_scene(iso_field: str = "qcriterion") -> Scene:
+    """Cascade look: isosurfaces primary, streamlines off.
+
+    iso_field selects the isosurface quantity: "qcriterion" (clean in developed
+    turbulence) or "omega_mag" (vorticity magnitude, which shows the smooth
+    initial vortex array from t=0).
+    """
     from .scene import Background, Glow, Isosurface, Streamlines
     s = Scene(
         background=Background(enabled=True),
         # Glow very subtle so it does not wash out the isosurfaces.
         glow=Glow(enabled=True, field="omega_mag", opacity=0.08),
-        # Q-criterion isosurfaces are the star: let cine auto-pick the positive
-        # percentile threshold so vortex tubes fragmenting read clearly.
-        isosurface=Isosurface(enabled=True, field="qcriterion", values=()),
+        # Isosurfaces are the star: let cine auto-pick the positive percentile
+        # threshold so the vortex structures read clearly.
+        isosurface=Isosurface(enabled=True, field=iso_field, values=()),
         # Streamlines disabled: isosurfaces are the sole 3-D layer.
         # (The Streamlines object is kept so cine/composite code paths that
         # check scene.streamlines.enabled work without modification.)
@@ -43,7 +48,7 @@ def hero_scene() -> Scene:
 
 def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
                title="", handle="", caption="",
-               impact_time=None, fps=30) -> dict:
+               impact_time=None, fps=30, iso_field="qcriterion") -> dict:
     """Build the hero pieces. Only a subtle CM Sans title is rendered as chrome;
     no name/handle, no yellow caption/commentary, no impact annotation. The
     handle/caption params are accepted (for CLI compatibility) but ignored.
@@ -55,7 +60,7 @@ def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
         raise ValueError("empty series; nothing to render")
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    scene = hero_scene()
+    scene = hero_scene(iso_field=iso_field)
     results: dict = {}
 
     # Portrait 1080x1350 (top 1080x900 + plot 1080x450) and square 1080x1080.

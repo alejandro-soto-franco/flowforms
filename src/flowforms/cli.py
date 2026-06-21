@@ -53,6 +53,7 @@ def main(argv=None) -> int:
     hero_p.add_argument("--caption", default="")
     hero_p.add_argument("--title", default="")
     hero_p.add_argument("--quantity", default=None)
+    hero_p.add_argument("--iso-field", default="qcriterion")
 
     args = parser.parse_args(argv)
 
@@ -149,6 +150,7 @@ def main(argv=None) -> int:
             caption = r.get("caption", args.caption)
             title = r.get("title", args.title)
             quantity = r.get("quantity", "enstrophy")
+            iso_field = r.get("iso_field", args.iso_field)
         else:
             for attr, name in (("series", "--series"), ("diagnostics", "--diagnostics"), ("out_dir", "--out-dir")):
                 if not getattr(args, attr):
@@ -162,10 +164,11 @@ def main(argv=None) -> int:
             caption = args.caption
             title = args.title
             quantity = args.quantity or "enstrophy"
+            iso_field = args.iso_field
         fhero.build_hero(
             fio.load_series(series_path), fdiag.load(diag_path),
             out_dir=out_dir, impact_time=impact_time,
-            handle=handle, caption=caption, title=title)
+            handle=handle, caption=caption, title=title, iso_field=iso_field)
         return 0
 
     return 1
