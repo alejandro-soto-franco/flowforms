@@ -27,13 +27,16 @@ def hero_scene() -> Scene:
         # percentile threshold so vortex tubes fragmenting read clearly.
         isosurface=Isosurface(enabled=True, field="qcriterion", values=()),
         # A handful of faint streamlines hint at large-scale flow without
-        # blocking the view of the isosurface geometry.
+        # blocking the view of the isosurface geometry. Tubes are held for
+        # 30 frames so topology is slow and legible; the orbit camera keeps
+        # moving while the geometry stays fixed.
         streamlines=Streamlines(
             enabled=True,
             vectors="velocity",
             n_points=40,
             radius=0.01,
             opacity=0.15,
+            update_every=30,
         ),
     )
     return s

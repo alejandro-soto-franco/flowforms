@@ -82,8 +82,9 @@ def rolling_plot(diag: Diagnostics, quantity: str, t_now: float, *,
         ax.spines[side].set_linewidth(0.8)
     ax.xaxis.set_major_formatter(brand.sans_tick_formatter())
     ax.yaxis.set_major_formatter(brand.sans_tick_formatter())
-    ax.set_xlabel(r"$t$")
-    ax.set_ylabel(_LABELS.get(quantity, quantity))
+    ax.tick_params(labelsize=13)
+    ax.set_xlabel(r"$t$", fontsize=19)
+    ax.set_ylabel(_LABELS.get(quantity, quantity), fontsize=19)
     img = _fig_to_rgb(fig)
     return _crop_or_pad(img, h, w)
 
@@ -152,9 +153,19 @@ def render_composite_animation(series, diag: Diagnostics, scene: Scene, *,
     # Grow from the series start; the right edge tracks t_now per frame.
     t0 = float(times[0]) if len(times) else None
     frames_rgb = []
+    # Streamline cache: recompute tubes every update_every frames; hold in between.
+    tubes_cache = None
+    update_every = max(1, scene.streamlines.update_every) if scene.streamlines.enabled else 1
     for i in range(n):
         cam = positions[i] if positions is not None else None
-        top = _cine.render_scene(series[i], scene, size=top_size, camera_position=cam)
+        if scene.streamlines.enabled:
+            if tubes_cache is None or i % update_every == 0:
+                tubes_cache = _cine.streamline_tubes(series[i], scene)
+            st_arg = tubes_cache
+        else:
+            st_arg = None
+        top = _cine.render_scene(series[i], scene, size=top_size, camera_position=cam,
+                                 streamline_tubes=st_arg)
         bottom = rolling_plot(diag, quantity, float(times[i]),
                               size_px=plot_size,
                               xlim=(t0, None) if t0 is not None else None)

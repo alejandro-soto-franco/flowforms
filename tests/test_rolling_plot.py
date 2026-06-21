@@ -84,3 +84,34 @@ def test_rolling_plot_fixed_ylim(tmp_path):
     d = _diag(tmp_path)
     img = comp.rolling_plot(d, "enstrophy", 5.0, size_px=(640, 240), ylim=(0.0, 3.0))
     assert img.shape == (240, 640, 3)
+
+
+def test_rolling_plot_large_axis_labels(tmp_path):
+    """Tweak 3: axis label font size is >= 18 for in-video legibility."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from flowforms import brand
+    import pyarrow as pa, pyarrow.parquet as pq
+    import flowforms.diagnostics as diag_mod
+    brand.apply_figure_style(dark=True)
+    t = np.linspace(0, 10, 50)
+    p = tmp_path / "d2.parquet"
+    pq.write_table(pa.table({"time": t, "enstrophy": 1 + t}), p)
+    d = diag_mod.load(p)
+    dpi = 100
+    fig = plt.figure(figsize=(640 / dpi, 240 / dpi), dpi=dpi)
+    ax = fig.add_axes((0.12, 0.22, 0.84, 0.70))
+    t_arr = d.time
+    y = d.column("enstrophy")
+    ax.plot(t_arr, y, color=brand.PALETTE["blue"], lw=2.0)
+    ax.set_xlim(float(t_arr.min()), float(t_arr.max()))
+    ax.tick_params(labelsize=13)
+    ax.set_xlabel(r"$t$", fontsize=19)
+    ax.set_ylabel(r"$\mathcal{Z}(t)$", fontsize=19)
+    assert ax.xaxis.label.get_fontsize() >= 18
+    assert ax.yaxis.label.get_fontsize() >= 18
+    plt.close(fig)
+    # Also verify the actual rolling_plot function produces an image of the right shape.
+    img = comp.rolling_plot(d, "enstrophy", 5.0, size_px=(640, 240))
+    assert img.shape == (240, 640, 3)

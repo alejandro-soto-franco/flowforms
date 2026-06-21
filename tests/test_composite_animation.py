@@ -74,3 +74,28 @@ def test_composite_animation_writes(tmp_path):
         series, d, Scene.default_grid(), out=out, fps=8,
         top_size=(128, 96), plot_size=(128, 48), formats=("mp4",))
     assert all(Path(x).exists() and Path(x).stat().st_size > 0 for x in paths)
+
+
+@pytest.mark.skipif(not _has_gl(), reason="no GL/xvfb")
+def test_composite_animation_streamline_cache(tmp_path):
+    """Tweak 1: update_every=2 with a 6-frame series writes a valid movie."""
+    from tests.test_spectrum import _single_mode_frame
+    from flowforms.scene import Streamlines, Glow, Background
+    n = 6
+    frames = [_single_mode_frame(n=16, k0=2) for _ in range(n)]
+    times = np.linspace(0, 1, n)
+    series = _FakeSeries(frames, times)
+    p = tmp_path / "d.parquet"
+    pq.write_table(pa.table({"time": times, "enstrophy": 1 + times}), p)
+    d = diag.load(p)
+    scene = Scene(
+        background=Background(enabled=True),
+        glow=Glow(enabled=True, field="omega_mag", opacity=0.35),
+        streamlines=Streamlines(enabled=True, vectors="velocity", n_points=20,
+                                opacity=0.15, update_every=2),
+    )
+    out = tmp_path / "comp_cache"
+    paths = comp.render_composite_animation(
+        series, d, scene, out=out, fps=6,
+        top_size=(128, 96), plot_size=(128, 48), formats=("mp4",))
+    assert all(Path(x).exists() and Path(x).stat().st_size > 0 for x in paths)

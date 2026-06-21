@@ -33,6 +33,7 @@ class Streamlines:
     radius: float = 0.01
     cmap: str | None = None
     opacity: float = 1.0
+    update_every: int = 1  # frames between streamline recomputes; 1 = per-frame
 
 
 @dataclass

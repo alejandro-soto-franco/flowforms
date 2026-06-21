@@ -9,6 +9,28 @@ from .io import Frame
 from .scene import Scene
 
 
+# Sentinel: distinguishes "caller did not pass streamline_tubes" from "caller
+# passed None" (which means skip streamlines explicitly).
+class _Unset:
+    pass
+
+
+_UNSET = _Unset()
+
+
+def _display_label(field: str) -> str:
+    """Map internal field names to legible display labels for scalar bars.
+
+    VTK cannot render LaTeX/bold, so we use Unicode approximations.
+    """
+    _MAP = {
+        "velocity_mag": "‖u‖",   # ||u||
+        "omega_mag": "‖ω‖",  # ||omega||
+        "qcriterion": "Q",
+    }
+    return _MAP.get(field, field)
+
+
 def _apply_cm_sans_to_scalar_bar(pl: pv.Plotter) -> None:
     """Set the scalar bar actor's title and label text to CM Sans (cmss10.ttf).
 
@@ -52,7 +74,38 @@ def _glow_scalar_bar_args(field: str) -> Any:
     return args
 
 
-def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
+def streamline_tubes(frame: Frame, scene: Scene) -> Any:
+    """Compute streamline tube geometry for one frame.
+
+    Returns the PyVista tube mesh on success, or None if seeding fails or the
+    vector field is absent. This is the reusable computation that the caching
+    layer in render_animation / render_composite_animation calls and holds
+    between frames.
+    """
+    mesh = frame.mesh
+    if not scene.streamlines.enabled or scene.streamlines.vectors not in mesh.point_data:
+        return None
+    try:
+        stream: Any = mesh.streamlines(
+            vectors=scene.streamlines.vectors,
+            n_points=scene.streamlines.n_points,
+            source_radius=(mesh.length / 2) or 1.0,
+        )
+        tubes: Any = stream.tube(radius=scene.streamlines.radius)
+        return tubes
+    except Exception:
+        return None
+
+
+def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene,
+                 _streamline_tubes: Any = _UNSET) -> None:
+    """Add grid-type scene layers to an already-created Plotter.
+
+    _streamline_tubes controls the streamlines layer:
+      - _UNSET (default): compute from frame on the fly (original behavior).
+      - None: skip the streamlines layer entirely.
+      - a mesh: draw this precomputed tube mesh directly.
+    """
     mesh = frame.mesh
     if scene.glow.enabled:
         try:
@@ -112,7 +165,7 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
                 iso_colored = iso
                 color_field = scene.isosurface.field
             sbar_args: Any = dict(
-                title=color_field,
+                title=_display_label(color_field),
                 color=brand.PALETTE["paper"],
                 title_font_size=14,
                 label_font_size=11,
@@ -145,22 +198,25 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
             # glyph can fail if the vector field is all-zero or tolerance is invalid;
             # skip gracefully.
             pass
-    if scene.streamlines.enabled and scene.streamlines.vectors in mesh.point_data:
+    # Streamlines: three modes controlled by _streamline_tubes.
+    #   _UNSET -> compute from frame now (original per-frame behavior).
+    #   None   -> skip entirely (caller disabled or caching decided to skip).
+    #   mesh   -> draw precomputed tubes from the cache.
+    if isinstance(_streamline_tubes, _Unset):
+        # Original behavior: compute on the fly.
+        tubes_to_draw = streamline_tubes(frame, scene)
+    else:
+        tubes_to_draw = _streamline_tubes
+    if tubes_to_draw is not None:
         try:
-            stream: Any = mesh.streamlines(
-                vectors=scene.streamlines.vectors,
-                n_points=scene.streamlines.n_points,
-                source_radius=(mesh.length / 2) or 1.0,
-            )
-            tubes: Any = stream.tube(radius=scene.streamlines.radius)
             pl.add_mesh(  # type: ignore[arg-type]
-                tubes,
+                tubes_to_draw,
                 cmap=scene.streamlines.cmap or brand.field_cmap("magnitude"),
                 opacity=scene.streamlines.opacity,
                 show_scalar_bar=False,  # decorative layer; isosurface owns the bar
             )
         except Exception:
-            pass  # streamline seeding can fail on degenerate fields; skip the layer
+            pass  # drawing can still fail on degenerate meshes; skip gracefully
 
 
 def _surface_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
@@ -208,8 +264,15 @@ def _surface_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
 
 
 def render_scene(frame: Frame, scene: Scene, *, size: tuple[int, int] = (1080, 1080),
-                 camera_position: Any = None, return_img: bool = True) -> np.ndarray:
-    """Render one frame's enabled layers off-screen, return an RGB array."""
+                 camera_position: Any = None, return_img: bool = True,
+                 streamline_tubes: Any = _UNSET) -> np.ndarray:
+    """Render one frame's enabled layers off-screen, return an RGB array.
+
+    streamline_tubes controls the streamlines layer for grid frames:
+      - omitted / _UNSET: compute per-frame (original behavior, back-compat).
+      - None: skip streamlines entirely for this frame.
+      - a PyVista mesh: draw this precomputed tube mesh (enables caching).
+    """
     pv.OFF_SCREEN = True
     pl = pv.Plotter(off_screen=True, theme=brand.cinema_pv_theme(),
                     window_size=list(size))
@@ -217,7 +280,7 @@ def render_scene(frame: Frame, scene: Scene, *, size: tuple[int, int] = (1080, 1
         color: str = scene.background.color or brand.PALETTE["cine_bg"]
         pl.background_color = color  # type: ignore[assignment]
     if frame.kind == "grid":
-        _grid_layers(pl, frame, scene)
+        _grid_layers(pl, frame, scene, _streamline_tubes=streamline_tubes)
     else:
         _surface_layers(pl, frame, scene)
     if camera_position is not None:
@@ -293,10 +356,20 @@ def render_animation(series, scene: Scene, *, out, fps: int = 30,
         center, radius = _camera.bounds_center_radius(series[0].mesh)
         positions = _camera.orbit_positions(center, radius, n)
     frames_rgb = []
+    # Streamline cache: recompute tubes every update_every frames; hold in between.
+    tubes_cache: Any = None
+    update_every = max(1, scene.streamlines.update_every) if scene.streamlines.enabled else 1
     for i in range(n):
         frame = series[i]
         cam = positions[i] if positions is not None else None
-        img = render_scene(frame, scene, size=size, camera_position=cam)
+        if scene.streamlines.enabled:
+            if tubes_cache is None or i % update_every == 0:
+                tubes_cache = streamline_tubes(frame, scene)
+            st_arg: Any = tubes_cache
+        else:
+            st_arg = None
+        img = render_scene(frame, scene, size=size, camera_position=cam,
+                           streamline_tubes=st_arg)
         frames_rgb.append(img)
     frames_rgb = normalize_frames(frames_rgb)
     written = []

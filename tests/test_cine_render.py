@@ -89,3 +89,43 @@ def test_streamlines_faint_opacity_renders_without_error():
     )
     img = cine.render_scene(frame, scene, size=(128, 128))
     assert isinstance(img, np.ndarray) and img.shape[2] == 3
+
+
+def test_render_scene_with_precomputed_streamline_tubes():
+    """Tweak 1: render_scene with a precomputed streamline_tubes mesh returns an image."""
+    frame = _single_mode_frame(n=24, k0=2)
+    scene = Scene(
+        streamlines=Streamlines(enabled=True, n_points=40, opacity=0.15),
+    )
+    tubes = cine.streamline_tubes(frame, scene)
+    # tubes may be None if seeding failed on the synthetic grid; either way
+    # passing it through render_scene must not crash and must return an image.
+    img = cine.render_scene(frame, scene, size=(128, 128), streamline_tubes=tubes)
+    assert isinstance(img, np.ndarray) and img.shape[2] == 3
+
+
+def test_render_scene_streamline_tubes_none_skips_without_error():
+    """Tweak 1: passing streamline_tubes=None skips streamlines without error."""
+    frame = _single_mode_frame(n=24, k0=2)
+    scene = Scene(
+        streamlines=Streamlines(enabled=True, n_points=40, opacity=0.15),
+    )
+    img = cine.render_scene(frame, scene, size=(128, 128), streamline_tubes=None)
+    assert isinstance(img, np.ndarray) and img.shape[2] == 3
+
+
+def test_display_label_velocity_mag():
+    """Tweak 2: _display_label maps velocity_mag to the norm Unicode symbol."""
+    assert cine._display_label("velocity_mag") == "‖u‖"
+
+
+def test_display_label_omega_mag():
+    assert cine._display_label("omega_mag") == "‖ω‖"
+
+
+def test_display_label_qcriterion():
+    assert cine._display_label("qcriterion") == "Q"
+
+
+def test_display_label_passthrough():
+    assert cine._display_label("some_other_field") == "some_other_field"
