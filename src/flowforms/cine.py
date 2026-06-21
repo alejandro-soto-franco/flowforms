@@ -167,14 +167,14 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene,
             sbar_args: Any = dict(
                 title=_display_label(color_field),
                 color=brand.PALETTE["paper"],
-                title_font_size=14,
-                label_font_size=11,
+                title_font_size=26,
+                label_font_size=12,
                 n_labels=3,
-                vertical=True,
-                position_x=0.02,
-                position_y=0.10,
-                width=0.08,
-                height=0.55,
+                vertical=False,
+                position_x=0.30,
+                position_y=0.06,
+                width=0.40,
+                height=0.05,
             )
             pl.add_mesh(  # type: ignore[arg-type]
                 iso_colored,
@@ -344,7 +344,8 @@ def normalize_frames(frames, *, multiple: int = 16) -> list[np.ndarray]:
 
 def render_animation(series, scene: Scene, *, out, fps: int = 30,
                      size: tuple[int, int] = (1080, 1080), orbit: bool = True,
-                     formats: tuple[str, ...] = ("mp4", "webm")) -> list[Path]:
+                     formats: tuple[str, ...] = ("mp4", "webm"),
+                     orbit_revolutions: float = 1.0) -> list[Path]:
     """Render a Series to one movie per format with an optional orbit camera."""
     n = len(series)
     if n == 0:
@@ -354,7 +355,8 @@ def render_animation(series, scene: Scene, *, out, fps: int = 30,
     positions = None
     if orbit:
         center, radius = _camera.bounds_center_radius(series[0].mesh)
-        positions = _camera.orbit_positions(center, radius, n)
+        positions = _camera.orbit_positions(center, radius, n,
+                                            revolutions=orbit_revolutions)
     frames_rgb = []
     # Streamline cache: recompute tubes every update_every frames; hold in between.
     tubes_cache: Any = None

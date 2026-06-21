@@ -133,7 +133,8 @@ def render_composite_animation(series, diag: Diagnostics, scene: Scene, *,
                                quantity: str = "enstrophy", out, fps: int = 30,
                                top_size=(1080, 810), plot_size=(1080, 360),
                                layout: str = "stacked", orbit: bool = True,
-                               formats=("mp4", "webm"), title=None):
+                               formats=("mp4", "webm"), title=None,
+                               orbit_revolutions: float = 1.0):
     """Render the cinematic composite: 3D render over a GROWING rolling plot.
 
     The growing rolling plot conveys time, so there is no per-frame time
@@ -148,7 +149,8 @@ def render_composite_animation(series, diag: Diagnostics, scene: Scene, *,
     positions = None
     if orbit:
         center, radius = _camera.bounds_center_radius(series[0].mesh)
-        positions = _camera.orbit_positions(center, radius, n)
+        positions = _camera.orbit_positions(center, radius, n,
+                                            revolutions=orbit_revolutions)
     times = np.asarray(series.times)
     # Grow from the series start; the right edge tracks t_now per frame.
     t0 = float(times[0]) if len(times) else None

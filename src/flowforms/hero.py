@@ -26,12 +26,11 @@ def hero_scene() -> Scene:
         # Q-criterion isosurfaces are the star: let cine auto-pick the positive
         # percentile threshold so vortex tubes fragmenting read clearly.
         isosurface=Isosurface(enabled=True, field="qcriterion", values=()),
-        # A handful of faint streamlines hint at large-scale flow without
-        # blocking the view of the isosurface geometry. Tubes are held for
-        # 30 frames so topology is slow and legible; the orbit camera keeps
-        # moving while the geometry stays fixed.
+        # Streamlines disabled: isosurfaces are the sole 3-D layer.
+        # (The Streamlines object is kept so cine/composite code paths that
+        # check scene.streamlines.enabled work without modification.)
         streamlines=Streamlines(
-            enabled=True,
+            enabled=False,
             vectors="velocity",
             n_points=40,
             radius=0.01,
@@ -68,7 +67,7 @@ def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
         paths = _composite.render_composite_animation(
             series, diag, scene, quantity="enstrophy",
             out=out_dir / f"hero_{name}", fps=fps, layout="stacked",
-            formats=formats, title=title, **sz)
+            formats=formats, title=title, orbit_revolutions=0.75, **sz)
         results[name] = paths
 
     # Poster: a single composited frame at the impact / enstrophy-peak time,

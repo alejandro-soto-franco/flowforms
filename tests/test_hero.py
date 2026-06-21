@@ -12,6 +12,12 @@ class _FakeSeries:
     def __iter__(self): return iter(())
 
 
+def test_hero_scene_streamlines_disabled():
+    """Tweak 1: hero_scene() must have streamlines.enabled == False."""
+    s = hero.hero_scene()
+    assert not s.streamlines.enabled
+
+
 def test_poster_frame_selection():
     # The poster frame is the enstrophy peak when no impact_time is given.
     times = np.linspace(0, 10, 50)
