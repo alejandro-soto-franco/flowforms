@@ -42,7 +42,7 @@ def hero_scene() -> Scene:
 
 
 def build_hero(series, diag, *, out_dir, formats=("mp4", "webm"),
-               title="Taylor-Green Turbulence Cascade", handle="", caption="",
+               title="", handle="", caption="",
                impact_time=None, fps=30) -> dict:
     """Build the hero pieces. Only a subtle CM Sans title is rendered as chrome;
     no name/handle, no yellow caption/commentary, no impact annotation. The

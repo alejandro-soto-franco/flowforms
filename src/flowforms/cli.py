@@ -147,7 +147,7 @@ def main(argv=None) -> int:
             impact_time = r.get("impact_time", args.impact_time)
             handle = r.get("handle", args.handle)
             caption = r.get("caption", args.caption)
-            title = r.get("title", args.title or "Taylor-Green Turbulence Cascade")
+            title = r.get("title", args.title)
             quantity = r.get("quantity", "enstrophy")
         else:
             for attr, name in (("series", "--series"), ("diagnostics", "--diagnostics"), ("out_dir", "--out-dir")):
@@ -160,7 +160,7 @@ def main(argv=None) -> int:
             impact_time = args.impact_time
             handle = args.handle
             caption = args.caption
-            title = args.title or "Taylor-Green Turbulence Cascade"
+            title = args.title
             quantity = args.quantity or "enstrophy"
         fhero.build_hero(
             fio.load_series(series_path), fdiag.load(diag_path),
