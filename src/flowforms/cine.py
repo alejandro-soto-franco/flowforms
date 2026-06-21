@@ -157,6 +157,7 @@ def _grid_layers(pl: pv.Plotter, frame: Frame, scene: Scene) -> None:
                 tubes,
                 cmap=scene.streamlines.cmap or brand.field_cmap("magnitude"),
                 opacity=scene.streamlines.opacity,
+                show_scalar_bar=False,  # decorative layer; isosurface owns the bar
             )
         except Exception:
             pass  # streamline seeding can fail on degenerate fields; skip the layer
